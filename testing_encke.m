@@ -10,6 +10,9 @@ mu = 39.4769; %Sun's gravitational parameter, (au^3/year^2)
 one_meter = 1/149597870700; %1m to au relation
 one_second = 1/(86400*365.25); %1 second in years
 acc_to_au_and_years = 6656.77641; %1m/s^2 to au/year^2
+hours = 3600; %Hours to seconds
+days = 24*hours; %Days to seconds
+deg = pi/180;
 
 
 %initial coordinates of spaceship (Sun-centered inertial frame)
@@ -26,17 +29,18 @@ ad_vect =  @(r_mag,v_unit) aT0 * ((1./r_mag).^2 ).* (v_unit);
 
 
 %% Encke's Method
-% J2 = 1082.63e-6;
+
 
 
 t = [0,20]; %in years
 t0 = t(1);
 tf = t(2);
 
-R0 = r0;
+R0 = r0';
+
 r0 = norm(R0);
 
-V0 = v0;
+V0 = v0';
 v0 = norm(V0);
 
 %Time step for Encke procedure
@@ -46,28 +50,28 @@ options = odeset('maxstep', del_t);
 %Begin Encke integration
 t = t0;
 tsave = t0;
-y = [R0; V0]';
-%%
-del_y0 = zeros(6,1);
+y = [R0 V0];
+
+del_y0 = zeros(1,6);
 
 t = t + del_t;
 
 while t <= tf + del_t/2
     [dum,z] = ode45(@(t,f) rates(t,f,R0,V0,t0,ad_vect), [t0 t], del_y0, options);
 
-    [Rosc,Vosc] = rv_from_r0v0(R0, V0, t-t0);
-    
+    [Rosc,Vosc] = rv_from_r0v0(R0', V0', t-t0);
+
     R0 = Rosc' + z(end,1:3);
+    
     V0 = Vosc' + z(end,4:6);
-    
+
     t0 = t;
-    
     tsave = [tsave;t];
     y = [y; [R0 V0]];
     t = t + del_t;
-    del_y0 = zeros(6,1);
+    del_y0 = zeros(1,6);
 end
-%%
+%% Plotting osculating elements
 t = tsave;
 n_times = length(t);
 
@@ -86,10 +90,61 @@ for j = 1:n_times
 end
 
 %% Plotting orbit
-figure()
-plot(y(:,1),y(:,2))
+figure(1)
+plot(0,0,'ro','DisplayName', 'SUN')
+hold on
+plot(y(:,1),y(:,2),'--bx','DisplayName', "Encke's Method")
+legend
+axis equal
 
+%%
+figure(2)
 
+subplot(2,1,1)
+plot(t/3600,(RA)/deg)
+title('Variation of Right Ascension')
+xlabel('hours')
+ylabel('{\it\Delta\Omega} (deg)')
+grid on
+grid minor
+axis tight
+
+subplot(2,1,2)
+plot(t/3600,(w)/deg)
+title('Variation of Argument of Perigee')
+xlabel('hours')
+ylabel('{\it\Delta\omega} (deg)')
+grid on
+grid minor
+axis tight
+
+figure(3)
+subplot(3,1,1)
+plot(t/3600,h)
+title('Variation of Angular Momentum')
+xlabel('hours')
+ylabel('{\it\Deltah} (km^2/s)')
+grid on
+grid minor
+axis tight
+
+subplot(3,1,2)
+plot(t/3600,e)
+title('Variation of Eccentricity')
+xlabel('hours')
+ylabel('\it\Deltae')
+grid on
+grid minor
+axis tight
+
+subplot(3,1,3)
+plot(t/3600,(i)/deg)
+title('Variation of Inclination')
+xlabel('hours')
+ylabel('{\it\Deltai} (deg)')
+grid on
+grid minor
+axis tight
 %%
 
 
@@ -229,7 +284,7 @@ function x = kepler_U(dt, ro, vro, a)
     end
     
     if n > nMax
-        fprintf('\n **No. iterations of Kepler’s equation = %g', n)
+        fprintf("\n **No. iterations of Kepler's equation = %g", n)
         fprintf('\n F/dFdx = %g\n', F/dFdx)
     end
     
