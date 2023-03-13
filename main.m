@@ -33,10 +33,11 @@ ad_vect =  @(r_mag,v_unit) aT0 * ((1./r_mag).^2 ).* (v_unit);
 %%%
 % Directly solving perturbed two-body problem with ode45
 %%%
-
+del_t = 0.01;
+options = odeset('maxstep', del_t);
 tspan = [0,20];
 y0 = [r0;v0];
-[t_cowell,y_cowell] = ode45(@(t,y) cowell(y,ad_vect),tspan,y0);
+[t_cowell,y_cowell] = ode45(@(t,y) cowell(y,ad_vect),tspan,y0,options);
 
 %% Part 2 - Encke's Method
 %%%
@@ -193,15 +194,15 @@ function stateSpaceRepCowell = cowell(y,ad_fun)
     v = y(4:6);
     global mu
     
-    v_mag = sqrt(sum(v.^2));
-    v_unit = v./v_mag;
+    v_mag = norm(v);
+    v_unit = v/v_mag;
 
-    r_mag = sqrt(sum(r.^2));
+    r_mag = norm(r);
 %     r_unit = r./r_mag;
     
     ad = ad_fun(r_mag,v_unit);
 
-    stateSpaceRepCowell = [v;ad-(mu.*r)./(r_mag.^3)];
+    stateSpaceRepCowell = [v;ad-(mu.*r)/(r_mag^3)];
 end
 
 %Part 2: Encke's method (functions)
@@ -276,7 +277,6 @@ function dfdt = rates(t,f,R0,V0,t0,ad_vect)
 %     rpp = norm(Rpp);
     
     %compute perturbing acceleration (here for J2, need to change to ours)
-%     RE = earthRadius;
 %     xx = Rpp(1); yy = Rpp(2); zz = Rpp(3);
 %     fac = 3/2*J2*(mu/rpp^2)*(RE/rpp)^2;
 %     ap = -fac*[(1 - 5*(zz/rpp)^2)*(xx/rpp) ...
@@ -382,7 +382,6 @@ function [R,V] = rv_from_r0v0(R0,V0,t)
     alpha = 2/r0 - v0^2/mu;
     
     %Universal anomaly
-    
     x = kepler_U(t,r0,vr0,alpha);
     
     %f and g functions:
@@ -397,6 +396,6 @@ function [R,V] = rv_from_r0v0(R0,V0,t)
     %Derivatives of f and g
     [fdot, gdot] = fDot_and_gDot(x, r, r0, alpha);
     
-    %...Compute the final velocity:
+    %Compute the final velocity:
     V = fdot*R0 + gdot*V0;
 end
