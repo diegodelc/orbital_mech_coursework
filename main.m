@@ -24,7 +24,7 @@ aT0 = (1/3) * 10^-4; %m*s^-2
 aT0 = aT0 * one_meter/(one_second^2); %au/year^2
 % aT0 = aT0 * acc_to_au_and_years;
 
-
+%function handle for calculating acceleration
 ad_vect =  @(r_mag,v_unit) aT0 * ((1./r_mag).^2 ).* (v_unit);
 
 
@@ -34,21 +34,9 @@ ad_vect =  @(r_mag,v_unit) aT0 * ((1./r_mag).^2 ).* (v_unit);
 % Directly solving perturbed two-body problem with ode45
 %%%
 
-
-
 tspan = [0,20];
 y0 = [r0;v0];
 [t_cowell,y_cowell] = ode45(@(t,y) cowell(y,ad_vect),tspan,y0);
-
-% Plotting Cowell's method only
-val = 0;
-figure()
-plot(0,0,'ro','DisplayName', 'SUN') %the sun
-hold on
-plot(y_cowell(:,1+val),y_cowell(:,2+val),'-.b','DisplayName',"Cowell's Method")
-legend
-axis equal
-title("Cowell's method")
 
 %% Part 2 - Encke's Method
 %%%
@@ -71,7 +59,7 @@ V0 = v0';
 v0 = norm(V0);
 
 %Time step for Encke procedure
-del_t = 0.01; %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+del_t = 5/365; %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 options = odeset('maxstep', del_t);
 
 %Begin Encke integration
@@ -84,13 +72,13 @@ del_y0 = zeros(1,6);
 t = t + del_t;
 
 while t <= tf + del_t/2
-    [dum,z] = ode45(@(t,f) rates(t,f,R0,V0,t0,ad_vect), [t0 t], del_y0, options);
+    [~,z] = ode45(@(t,f) rates(t,f,R0,V0,t0,ad_vect), [t0 t], del_y0, options);
 
-    [Rosc,Vosc] = rv_from_r0v0(R0', V0', t-t0);
+    [Rosc,Vosc] = rv_from_r0v0(R0, V0, t-t0);
 
-    R0 = Rosc' + z(end,1:3);
+    R0 = Rosc + z(end,1:3);
     
-    V0 = Vosc' + z(end,4:6);
+    V0 = Vosc + z(end,4:6);
 
     t0 = t;
     tsave = [tsave;t];
@@ -99,20 +87,33 @@ while t <= tf + del_t/2
     del_y0 = zeros(1,6);
 end
 y_encke = y;
-%Plot Encke's Method only
-figure()
-plot(0,0,'ro','DisplayName', 'SUN')
-hold on
-plot(y_encke(:,1),y_encke(:,2),'-.b','DisplayName', "Encke's Method")
-legend
-axis equal
-title("Encke's Methd")
 
-%% Plotting both methods together
+
+%% Plotting
+% % Plotting Cowell's method only
+% val = 0;
+% figure()
+% plot(0,0,'ro','DisplayName', 'SUN') %the sun
+% hold on
+% plot(y_cowell(:,1+val),y_cowell(:,2+val),'-.b','DisplayName',"Cowell's Method")
+% legend
+% axis equal
+% title("Cowell's method")
+% 
+% %Plot Encke's method only
+% figure()
+% plot(0,0,'ro','DisplayName', 'SUN')
+% hold on
+% plot(y_encke(:,1),y_encke(:,2),'-.b','DisplayName', "Encke's Method")
+% legend
+% axis equal
+% title("Encke's Methd")
+
+%Plotting both methods together
 figure()
 plot(0,0,'ro','DisplayName', 'SUN')
 hold on
-plot(y_cowell(:,1+val),y_cowell(:,2+val),'-b','DisplayName',"Cowell's Method")
+plot(y_cowell(:,1),y_cowell(:,2),'-.b','DisplayName',"Cowell's Method")
 hold on
 plot(y_encke(:,1),y_encke(:,2),'-k','DisplayName', "Encke's Method")
 legend
@@ -285,8 +286,11 @@ function dfdt = rates(t,f,R0,V0,t0,ad_vect)
 %     F = 1 - (rosc/rpp)^3;
 %     del_a = -mu/rosc^3*(del_r - F*Rpp) + ap;
     v_in = Vpp;
+    v_unit = v_in/norm(v_in);
+    
     r_in = Rpp;
-    del_a = ad_vect(norm(r_in),v_in/norm(v_in));
+    r_mag = norm(r_in);
+    del_a = ad_vect(r_mag,v_unit);
     %are these two the same?
 %     dfdt = [del_v(1) del_v(2) del_v(3) del_a(1) del_a(2) del_a(3)]';
     dfdt = [del_v del_a]';
@@ -308,7 +312,6 @@ function c = stumpC(z)
         c = (1 - cos(sqrt(z)))/z;
     elseif z < 0
         c = (cosh(sqrt(-z)) - 1)/(-z);
-        %%e44 MATLAB scripts
     else
         c = 1/2;
     end
