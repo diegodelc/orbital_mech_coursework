@@ -76,10 +76,10 @@ t = t + del_t;
 
 while t <= tf + del_t/2
 
-    [time,z] = ode45(@(t,f) rates(t,f,R0,V0,t0,ad_vect), [t0 t], del_y0, options);
+    [time,z] = ode45(@(t,f) rates_diego(t,f,R0,V0,t0,ad_vect,del_t), [t0 t], del_y0, options);
 
 
-    [Rosc,Vosc] = propDt(R0, V0, t,t0);
+    [Rosc,Vosc] = propDt(R0, V0, t,t0,del_t);
 
     
     R0 = Rosc + z(end,1:3);
@@ -95,7 +95,7 @@ while t <= tf + del_t/2
     del_y0 = zeros(1,6);
 
 end
-y_encke = y;
+y_encke_diego = y;
 
 
 %% Plotting
@@ -272,17 +272,14 @@ function coe = coe_from_sv(R,V,mu)
     coe = [h e RA incl w TA a];
 end
 
-function dfdt = rates(t,f,R0,V0,t0,ad_vect)
+function dfdt = rates_diego(t,f,R0,V0,t0,ad_vect,del_t)
     del_r = f(1:3)'; %Position deviation
     del_v = f(4:6)'; %Velocity deviation
     
 %     disp("from rates: ")
-    [Rosc,Vosc] = propDt(R0, V0, t,t0);
+    [Rosc,Vosc] = propDt(R0, V0, t,t0,del_t);
     
-    if isnan(Vosc)
-%         disp("here")
-        Vosc = V0;
-    end
+   
         
     Rpp = Rosc + del_r;
     Vpp = Vosc + del_v;
@@ -307,117 +304,13 @@ function dfdt = rates(t,f,R0,V0,t0,ad_vect)
     r_mag = norm(r_in);
     del_a = ad_vect(r_mag,v_unit);
     %are these two the same?
-    dfdt = [del_v(1) del_v(2) del_v(3) del_a(1) del_a(2) del_a(3)]';
-%     dfdt = [del_v del_a]';
+%     dfdt = [del_v(1) del_v(2) del_v(3) del_a(1) del_a(2) del_a(3)]';
+    dfdt = [del_v del_a]';
 
 end 
 
-function s = stumpS(z)
-    if z>0
-        s = (sqrt(z) - sin(sqrt(z)))/(sqrt(z))^3;
-    elseif z<0
-        s = (sinh(sqrt(-z)) - sqrt(-z))/(sqrt(-z))^3;
-    else
-        s = 1/6;
-    end
-end
 
-function c = stumpC(z)
-    if z > 0
-        c = (1 - cos(sqrt(z)))/z;
-    elseif z < 0
-        c = (cosh(sqrt(-z)) - 1)/(-z);
-    else
-        c = 1/2;
-    end
-end
-
-function x = kepler_U(dt, ro, vro, a)
-    global mu
-    
-    error = 1e-8;
-    nMax = 1000;
-
-    
-    x = sqrt(mu)*abs(a)*dt;
-    
-    n=0;
-    ratio = 1;
-    while abs(ratio) > error && n <= nMax
-        
-        n= n+1;
-        C = stumpC(a*x^2);
-        S = stumpS(a*x^2);
-
-        
-        F = ro*vro/sqrt(mu)*x^2*C + (1 - a*ro)*x^3*S + ro*x - sqrt(mu)*dt;
-        dFdx = ro*vro/sqrt(mu)*x*(1 - a*x^2*S) + (1 - a*ro)*x^2*C + ro;
-        ratio = F/dFdx;
-        x = x - ratio;
-    end
-    
-    if n > nMax
-        fprintf("\n **No. iterations of Kepler's equation = %g", n)
-        fprintf('\n F/dFdx = %g\n', F/dFdx)
-    end
-    
-end
-
-function [f,g] = f_and_g(x,t,ro,a)
-    global mu
-    
-    z = a*x^2;
-
-    f = 1 - x^2/ro*stumpC(z);
-    
-    g = t - 1/sqrt(mu)*x^3*stumpS(z);
-    
-    
-end
-
-function [fdot, gdot] = fDot_and_gDot(x, r, ro, a)
-    global mu
-    z = a*x^2;
-    
-    fdot = sqrt(mu)/r/ro*(z*stumpS(z) - 1)*x;
-    
-    gdot = 1 - x^2/r*stumpC(z);
-end
-
-function [R,V] = rv_from_r0v0(R0,V0,t)
-    global mu
-    
-    r0 = norm(R0);
-    v0 = norm(V0);
-    
-    %initial radial velocity
-    vr0 = dot(R0,V0)/r0;
-    
-    %Reciprocal of the semimajor axis
-    alpha = 2/r0 - v0^2/mu;
-    
-    %Universal anomaly
-    x = kepler_U(t,r0,vr0,alpha);
-    
-    %f and g functions:
-    [f, g] = f_and_g(x, t, r0, alpha);
-    
-    %Final position vector
-    R = f*R0 + g*V0;
-    
-    %Magnitude of R
-    r = norm(R);
-    
-    %Derivatives of f and g
-    [fdot, gdot] = fDot_and_gDot(x, r, r0, alpha);
-    
-    %Compute the final velocity:
-    V = fdot*R0 + gdot*V0;
-end
-
-
-
-function [R,V] = propDt(R0,V0,t,t0)
+function [R,V] = propDt(R0,V0,t,t0,t_del)
     global mu
 %     disp("R0 in prop")
 %     disp(R0)
@@ -459,12 +352,13 @@ function [R,V] = propDt(R0,V0,t,t0)
 
     %find M1
     M1 = M0 + n*(t-t0); %(t-t0) or t_del?
+    M1 = M0 + n*t_del;
 
     %iterate to find E
     E1 = M1;
     mydiff = 1; %dummy value to get into while loop
     counter = 0;
-    while abs(mydiff) > 1e-4
+    while abs(mydiff) > 1e-8
         mydiff = E1;
         E1 = M1 + e*sin(E1);
         mydiff = mydiff-E1;

@@ -16,8 +16,8 @@ deg = pi/180;
 
 
 %initial coordinates of spaceship (Sun-centered inertial frame)
-r0 = [-1.05;0;0]; %au
-v0 = [0;-6.1316;0]; %au/year ^j
+r0_og = [-1.05;0;0]; %au
+v0_og = [0;-6.1316;0]; %au/year ^j
 
 %acceleration from propulsion system
 aT0 = (1/3) * 10^-4; %m*s^-2
@@ -36,27 +36,21 @@ ad_vect =  @(r_mag,v_unit) aT0 * ((1./r_mag).^2 ).* (v_unit);
 del_t = 0.01;
 options = odeset('maxstep', del_t);
 tspan = [0,20];
-y0 = [r0;v0];
+y0 = [r0_og;v0_og];
 [t_cowell,y_cowell] = ode45(@(t,y) cowell(y,ad_vect),tspan,y0,options);
 
-%% Part 2 - Encke's Method
-%%%
-% Solving perturbed two-body problem using Encje's method
-%   Code implementation is based on framework from [1]
 
-% [1] Orbital Mechanics for Engineering Students, Fourth Edition, Howard D.Curtis, 
-%%%
-
+%% Part 2 - Encke's Method (my version)
 
 t = [0,20]; %in years
 t0 = t(1);
 tf = t(2);
 
-R0 = r0';
+R0 = r0_og';
 
 r0 = norm(R0);
 
-V0 = v0';
+V0 = v0_og';
 v0 = norm(V0);
 
 %Time step for Encke procedure
@@ -73,7 +67,64 @@ del_y0 = zeros(1,6);
 t = t + del_t;
 
 while t <= tf + del_t/2
-    [~,z] = ode45(@(t,f) rates(t,f,R0,V0,t0,ad_vect), [t0 t], del_y0, options)
+
+    [time,z] = ode45(@(t,f) rates_diego(t,f,R0,V0,t0,ad_vect,del_t), [t0 t], del_y0, options);
+
+
+    [Rosc,Vosc] = propDt(R0, V0, t,t0,del_t);
+
+    
+    R0 = Rosc + z(end,1:3);
+    
+    V0 = Vosc + z(end,4:6);
+    
+
+
+    t0 = t;
+    tsave = [tsave;t];
+    y = [y; [R0 V0]];
+    t = t + del_t;
+    del_y0 = zeros(1,6);
+
+end
+y_encke_diego = y;
+
+
+%% Part 2 - Encke's Method (from the book)
+%%%
+% Solving perturbed two-body problem using Encke's method
+%   Code implementation is based on framework from [1]
+
+% [1] Orbital Mechanics for Engineering Students, Fourth Edition, Howard D.Curtis, 
+%%%
+
+
+t = [0,20]; %in years
+t0 = t(1);
+tf = t(2);
+
+R0 = r0_og';
+
+r0 = norm(R0);
+
+V0 = v0_og';
+v0 = norm(V0);
+
+%Time step for Encke procedure
+del_t = 5/365; %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+options = odeset('maxstep', del_t);
+
+%Begin Encke integration
+t = t0;
+tsave = t0;
+y = [R0 V0];
+
+del_y0 = zeros(1,6);
+
+t = t + del_t;
+
+while t <= tf + del_t/2
+    [~,z] = ode45(@(t,f) rates_book(t,f,R0,V0,t0,ad_vect), [t0 t], del_y0, options)
 
     [Rosc,Vosc] = rv_from_r0v0(R0, V0, t-t0);
 
@@ -116,7 +167,9 @@ plot(0,0,'ro','DisplayName', 'SUN')
 hold on
 plot(y_cowell(:,1),y_cowell(:,2),'-.b','DisplayName',"Cowell's Method")
 hold on
-plot(y_encke(:,1),y_encke(:,2),'-k','DisplayName', "Encke's Method")
+plot(y_encke(:,1),y_encke(:,2),'-k','DisplayName', "Encke's Method - universal anomaly")
+hold on
+plot(y_encke_diego(:,1),y_encke_diego(:,2),'--r','DisplayName', "Encke's Method - moi")
 legend
 axis equal
 title("Cowell's and Encke's Methds")
@@ -264,7 +317,7 @@ function coe = coe_from_sv(R,V,mu)
     coe = [h e RA incl w TA a];
 end
 
-function dfdt = rates(t,f,R0,V0,t0,ad_vect)
+function dfdt = rates_book(t,f,R0,V0,t0,ad_vect)
     del_r = f(1:3)'; %Position deviation
     del_v = f(4:6)'; %Velocity deviation
     
@@ -398,4 +451,130 @@ function [R,V] = rv_from_r0v0(R0,V0,t)
     
     %Compute the final velocity:
     V = fdot*R0 + gdot*V0;
+end
+
+% Part 2 - my way
+function dfdt = rates_diego(t,f,R0,V0,t0,ad_vect,del_t)
+    del_r = f(1:3)'; %Position deviation
+    del_v = f(4:6)'; %Velocity deviation
+    
+%     disp("from rates: ")
+    [Rosc,Vosc] = propDt(R0, V0, t,t0,del_t);
+    
+   
+        
+    Rpp = Rosc + del_r;
+    Vpp = Vosc + del_v;
+%     Rpp = Rosc;
+%     Vpp = Vosc;
+%     rosc = norm(Rosc);
+%     rpp = norm(Rpp);
+    
+    %compute perturbing acceleration (here for J2, need to change to ours)
+%     xx = Rpp(1); yy = Rpp(2); zz = Rpp(3);
+%     fac = 3/2*J2*(mu/rpp^2)*(RE/rpp)^2;
+%     ap = -fac*[(1 - 5*(zz/rpp)^2)*(xx/rpp) ...
+%         (1 - 5*(zz/rpp)^2)*(yy/rpp) ...
+%         (3 - 5*(zz/rpp)^2)*(zz/rpp)];
+% 
+%     F = 1 - (rosc/rpp)^3;
+%     del_a = -mu/rosc^3*(del_r - F*Rpp) + ap;
+    v_in = Vpp;
+    v_unit = v_in/norm(v_in);
+    
+    r_in = Rpp;
+    r_mag = norm(r_in);
+    del_a = ad_vect(r_mag,v_unit);
+    %are these two the same?
+%     dfdt = [del_v(1) del_v(2) del_v(3) del_a(1) del_a(2) del_a(3)]';
+    dfdt = [del_v del_a]';
+
+end 
+
+
+function [R,V] = propDt(R0,V0,t,t0,t_del)
+    global mu
+%     disp("R0 in prop")
+%     disp(R0)
+%     V0
+%     del_t
+    r0 = norm(R0);
+    v0 = norm(V0);
+    
+    %semi-major axis (a)
+    a = -mu/(v0^2-2*mu/r0);
+
+    %find angular momentum (h)
+    H = cross(R0,V0);
+    h = norm(H);
+
+    %find eccentricity (e)
+    e = sqrt(1-h^2/(mu*a));
+
+%     E = (1/mu)*(H-mu*(R0/r0));
+%     e = norm(E);
+
+%     E = (1/mu)*cross(V0,H) - R0/r0;
+%     e = norm(E);
+
+    %find theta0
+    r0dot = dot(R0,V0)/r0;
+    sinTheta = h*r0dot/(mu*e);
+    cosTheta = (1/e) * (h^2/(r0*mu) -1);
+    theta0 = atan(sinTheta/cosTheta);
+
+    %find E0
+    E0 = 2*atan(sqrt((1+e)/(1-e))*tan(theta0/2));
+
+    %find M0
+    M0 = E0 - e*sin(E0);
+
+    %find n
+    n = sqrt(mu/a^3);
+
+    %find M1
+    M1 = M0 + n*(t-t0); %(t-t0) or t_del?
+    M1 = M0 + n*t_del;
+
+    %iterate to find E
+    E1 = M1;
+    mydiff = 1; %dummy value to get into while loop
+    counter = 0;
+    while abs(mydiff) > 1e-8
+        mydiff = E1;
+        E1 = M1 + e*sin(E1);
+        mydiff = mydiff-E1;
+        counter = counter +1;
+        if counter > 50
+            disp("Too many iterations solving for E, something is wrong")
+            break
+        end
+    end
+%     counter
+    
+    %find theta1
+    theta1 = 2*atan(sqrt((1+e)/(1-e))*tan(E1/2)); %if e < 1 -> imaginary number!!
+    del_theta = theta1-theta0;
+
+    %find r1
+    P = h^2/mu;
+    r = P/(1+e*cos(theta1));
+
+    %find f and g
+    f = 1 - (mu*r/h^2)*(1-cos(del_theta));
+    g = (r*r0/h)*sin(del_theta);
+
+    %find fdot and gdot
+    gdot = 1 - (mu*r0/h^2)*(1-cos(del_theta));
+    fdot = (f*gdot-1)/g;
+
+    %find R and V
+    R = f*R0 + g*V0;
+    V = fdot*R0 + gdot*V0;
+
+    
+    
+%     R = R';
+%     V = V';
+
 end
