@@ -73,7 +73,7 @@ del_y0 = zeros(1,6);
 t = t + del_t;
 
 while t <= tf + del_t/2
-    [~,z] = ode45(@(t,f) rates(t,f,R0,V0,t0,ad_vect), [t0 t], del_y0, options);
+    [~,z] = ode45(@(t,f) rates(t,f,R0,V0,t0,ad_vect), [t0 t], del_y0, options)
 
     [Rosc,Vosc] = rv_from_r0v0(R0, V0, t-t0);
 

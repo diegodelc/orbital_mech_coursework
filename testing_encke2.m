@@ -75,20 +75,25 @@ del_y0 = zeros(1,6);
 t = t + del_t;
 
 while t <= tf + del_t/2
-    [~,z] = ode45(@(t,f) rates(t,f,R0,V0,t0,ad_vect), [t0 t], del_y0, options);
 
-%     [Rosc,Vosc] = rv_from_r0v0(R0, V0, t-t0);
-    [Rosc,Vosc] = propDt(R0, V0, t-t0);
+    [time,z] = ode45(@(t,f) rates(t,f,R0,V0,t0,ad_vect), [t0 t], del_y0, options);
 
+
+    [Rosc,Vosc] = propDt(R0, V0, t,t0);
+
+    
     R0 = Rosc + z(end,1:3);
     
     V0 = Vosc + z(end,4:6);
+    
+
 
     t0 = t;
     tsave = [tsave;t];
     y = [y; [R0 V0]];
     t = t + del_t;
     del_y0 = zeros(1,6);
+
 end
 y_encke = y;
 
@@ -271,11 +276,18 @@ function dfdt = rates(t,f,R0,V0,t0,ad_vect)
     del_r = f(1:3)'; %Position deviation
     del_v = f(4:6)'; %Velocity deviation
     
+%     disp("from rates: ")
+    [Rosc,Vosc] = propDt(R0, V0, t,t0);
     
-    [Rosc,Vosc] = propDt(R0, V0, t-t0);
-    
+    if isnan(Vosc)
+%         disp("here")
+        Vosc = V0;
+    end
+        
     Rpp = Rosc + del_r;
     Vpp = Vosc + del_v;
+%     Rpp = Rosc;
+%     Vpp = Vosc;
 %     rosc = norm(Rosc);
 %     rpp = norm(Rpp);
     
@@ -295,8 +307,8 @@ function dfdt = rates(t,f,R0,V0,t0,ad_vect)
     r_mag = norm(r_in);
     del_a = ad_vect(r_mag,v_unit);
     %are these two the same?
-%     dfdt = [del_v(1) del_v(2) del_v(3) del_a(1) del_a(2) del_a(3)]';
-    dfdt = [del_v del_a]';
+    dfdt = [del_v(1) del_v(2) del_v(3) del_a(1) del_a(2) del_a(3)]';
+%     dfdt = [del_v del_a]';
 
 end 
 
@@ -405,8 +417,12 @@ end
 
 
 
-function [R,V] = propDt(R0,V0,del_t)
+function [R,V] = propDt(R0,V0,t,t0)
     global mu
+%     disp("R0 in prop")
+%     disp(R0)
+%     V0
+%     del_t
     r0 = norm(R0);
     v0 = norm(V0);
     
@@ -427,8 +443,8 @@ function [R,V] = propDt(R0,V0,del_t)
 %     e = norm(E);
 
     %find theta0
-    Rdot = dot(R0,V0)/r0;
-    sinTheta = h*norm(Rdot)/(mu*e);
+    r0dot = dot(R0,V0)/r0;
+    sinTheta = h*r0dot/(mu*e);
     cosTheta = (1/e) * (h^2/(r0*mu) -1);
     theta0 = atan(sinTheta/cosTheta);
 
@@ -442,19 +458,24 @@ function [R,V] = propDt(R0,V0,del_t)
     n = sqrt(mu/a^3);
 
     %find M1
-    M1 = M0 + n*del_t;
+    M1 = M0 + n*(t-t0); %(t-t0) or t_del?
 
     %iterate to find E
     E1 = M1;
     mydiff = 1; %dummy value to get into while loop
-    % counter = 0;
+    counter = 0;
     while abs(mydiff) > 1e-4
         mydiff = E1;
         E1 = M1 + e*sin(E1);
         mydiff = mydiff-E1;
-        %     counter = counter +1;
+        counter = counter +1;
+        if counter > 50
+            disp("Too many iterations solving for E, something is wrong")
+            break
+        end
     end
-
+%     counter
+    
     %find theta1
     theta1 = 2*atan(sqrt((1+e)/(1-e))*tan(E1/2)); %if e < 1 -> imaginary number!!
     del_theta = theta1-theta0;
@@ -464,7 +485,7 @@ function [R,V] = propDt(R0,V0,del_t)
     r = P/(1+e*cos(theta1));
 
     %find f and g
-    f = 1 - (mu*r/mu)*(1-cos(del_theta));
+    f = 1 - (mu*r/h^2)*(1-cos(del_theta));
     g = (r*r0/h)*sin(del_theta);
 
     %find fdot and gdot
@@ -474,6 +495,8 @@ function [R,V] = propDt(R0,V0,del_t)
     %find R and V
     R = f*R0 + g*V0;
     V = fdot*R0 + gdot*V0;
+
+    
     
 %     R = R';
 %     V = V';
