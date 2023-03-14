@@ -62,7 +62,7 @@ V0 = v0';
 v0 = norm(V0);
 
 %Time step for Encke procedure
-del_t = 1/365; %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+del_t = 5/365; %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 options = odeset('maxstep', del_t);
 
 %Begin Encke integration
@@ -124,7 +124,7 @@ plot(0,0,'ro','DisplayName', 'SUN')
 hold on
 plot(y_cowell(:,1),y_cowell(:,2),'-.b','DisplayName',"Cowell's Method")
 hold on
-plot(y_encke(:,1),y_encke(:,2),'-k','DisplayName', "Encke's Method")
+plot(y_encke_diego(:,1),y_encke_diego(:,2),'-kx','DisplayName', "Encke's Method")
 legend
 axis equal
 title("Cowell's and Encke's Methds")
@@ -134,8 +134,8 @@ t = tsave;
 n_times = length(t);
 
 for j = 1:n_times
-    R = [y_encke(j,1:3)];
-    V = [y_encke(j,4:6)];
+    R = [y_encke_diego(j,1:3)];
+    V = [y_encke_diego(j,4:6)];
     r(j) = norm(R);
     v(j) = norm(V);
     coe = coe_from_sv(R,V, mu);
@@ -310,12 +310,9 @@ function dfdt = rates_diego(t,f,R0,V0,t0,ad_vect,del_t)
 end 
 
 
-function [R,V] = propDt(R0,V0,t,t0,t_del)
+function [R,V] = propDt(R0,V0,t,t0,del_t)
     global mu
-%     disp("R0 in prop")
-%     disp(R0)
-%     V0
-%     del_t
+
     r0 = norm(R0);
     v0 = norm(V0);
     
@@ -327,22 +324,16 @@ function [R,V] = propDt(R0,V0,t,t0,t_del)
     h = norm(H);
 
     %find eccentricity (e)
-    e = sqrt(1-h^2/(mu*a));
-
-%     E = (1/mu)*(H-mu*(R0/r0));
-%     e = norm(E);
-
-%     E = (1/mu)*cross(V0,H) - R0/r0;
-%     e = norm(E);
+    E = (1/mu)*cross(V0,H) - R0/r0;
+    e = norm(E);
 
     %find theta0
-    r0dot = dot(R0,V0)/r0;
-    sinTheta = h*r0dot/(mu*e);
-    cosTheta = (1/e) * (h^2/(r0*mu) -1);
-    theta0 = atan(sinTheta/cosTheta);
-
+    theta0 = acos(dot(R0,E)/(r0*e));
+    
+    
     %find E0
-    E0 = 2*atan(sqrt((1+e)/(1-e))*tan(theta0/2));
+    E0 = 2*atan(sqrt((1-e)/(1+e))*tan(theta0/2));
+
 
     %find M0
     M0 = E0 - e*sin(E0);
@@ -351,22 +342,18 @@ function [R,V] = propDt(R0,V0,t,t0,t_del)
     n = sqrt(mu/a^3);
 
     %find M1
-    M1 = M0 + n*(t-t0); %(t-t0) or t_del?
-    M1 = M0 + n*t_del;
+    M1 = M0 + n*del_t;
 
     %iterate to find E
     E1 = M1;
     mydiff = 1; %dummy value to get into while loop
     counter = 0;
     while abs(mydiff) > 1e-8
+%     for i = 1:5
         mydiff = E1;
         E1 = M1 + e*sin(E1);
         mydiff = mydiff-E1;
         counter = counter +1;
-        if counter > 50
-            disp("Too many iterations solving for E, something is wrong")
-            break
-        end
     end
 %     counter
     
@@ -384,6 +371,9 @@ function [R,V] = propDt(R0,V0,t,t0,t_del)
 
     %find fdot and gdot
     gdot = 1 - (mu*r0/h^2)*(1-cos(del_theta));
+%     fdot = (mu/h) * ...
+%         ((1-cos(del_theta))/sin(del_theta)) * ...
+%         ((mu/h^2)*(1-cos(del_theta)) - (1/r0) - (1/r1));
     fdot = (f*gdot-1)/g;
 
     %find R and V
