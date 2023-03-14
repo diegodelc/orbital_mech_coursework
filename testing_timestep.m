@@ -46,103 +46,75 @@ vfinal = final(4:6)
 %% Part 2 - Encke's Method (using eccentric anomaly)
 %Time step for both Encke procedures
 del_t = 10/365; %time is in years
-options = odeset('maxstep', del_t);
+del_ts = [1,5,10,15,20,30,50,100,160,200]/365.25; %in days
+errors = zeros(length(del_ts),1);
 
+cowell_size = length(t_cowell);
 
-%These will be overwritten
-t0 = tspan(1);
-tf = tspan(2);
-
-R0 = R0_og';
-r0 = norm(R0);
-
-V0 = V0_og';
-v0 = norm(V0);
-
-
-%Begin Encke integration
-t = t0;
-tsave = t0;
-y = [R0 V0];
-
-del_y0 = zeros(1,6);
-
-t = t + del_t;
-
-while t <= tf + del_t/2
-
-    [time,z] = ode45(@(t,f) rates_diego(t,f,R0,V0,t0,ad_vect,del_t), [t0 t], del_y0, options);
-
-
-    [Rosc,Vosc] = propDt(R0, V0,del_t);
-
+for i = 1:length(del_ts)
+    [t,y] = encke(tspan,y0,del_ts(i),ad_vect);
+    this_size = length(t);
     
-    R0 = Rosc + z(end,1:3);
+    step = (cowell_size/this_size);
+    errors(i) = norm((y_cowell(1:step:end,:)-y));
     
-    V0 = Vosc + z(end,4:6);
-    
-
-
-    t0 = t;
-    tsave = [tsave;t];
-    y = [y; [R0 V0]];
-    t = t + del_t;
-    del_y0 = zeros(1,6);
-
 end
-tsave_encke_diego = tsave;
-y_encke_diego = y;
+%%
+figure()
+plot(del_ts*365.25,errors,'x--')
+xlabel("Rectification timestep \textit{(days)}", "interpreter","latex")
+ylabel("Error (L1 norm)", "interpreter","latex")
 
 
-%% Part 2 - Encke's Method (using unversal anomaly)
-%%%
-% Solving perturbed two-body problem using Encke's method
-%   Code implementation is based on framework from [1]
-
-% [1] Orbital Mechanics for Engineering Students, Fourth Edition, Howard D.Curtis, 
-%%%
-
-
-
-%These will be overwritten
-t0 = tspan(1);
-tf = tspan(2);
-
-R0 = R0_og';
-r0 = norm(R0);
-
-V0 = V0_og';
-v0 = norm(V0);
-
-
-
-%Begin Encke integration
-t = t0;
-tsave = t0;
-y = [R0 V0];
-
-del_y0 = zeros(1,6);
-
-t = t + del_t;
-
-while t <= tf + del_t/2
-    [~,z] = ode45(@(t,f) rates_book(t,f,R0,V0,t0,ad_vect), [t0 t], del_y0, options);
-
-    [Rosc,Vosc] = rv_from_r0v0(R0, V0, t-t0);
-
-    R0 = Rosc + z(end,1:3);
-    
-    V0 = Vosc + z(end,4:6);
-
-    t0 = t;
-    tsave = [tsave;t];
-    y = [y; [R0 V0]];
-    t = t + del_t;
-    del_y0 = zeros(1,6);
-end
-tsave_encke = tsave;
-y_encke = y;
-
+% % % % % %% Part 2 - Encke's Method (using unversal anomaly)
+% % % % % %%%
+% % % % % % Solving perturbed two-body problem using Encke's method
+% % % % % %   Code implementation is based on framework from [1]
+% % % % % 
+% % % % % % [1] Orbital Mechanics for Engineering Students, Fourth Edition, Howard D.Curtis, 
+% % % % % %%%
+% % % % % 
+% % % % % 
+% % % % % 
+% % % % % %These will be overwritten
+% % % % % t0 = tspan(1);
+% % % % % tf = tspan(2);
+% % % % % 
+% % % % % R0 = R0_og';
+% % % % % r0 = norm(R0);
+% % % % % 
+% % % % % V0 = V0_og';
+% % % % % v0 = norm(V0);
+% % % % % 
+% % % % % 
+% % % % % 
+% % % % % %Begin Encke integration
+% % % % % t = t0;
+% % % % % tsave = t0;
+% % % % % y = [R0 V0];
+% % % % % 
+% % % % % del_y0 = zeros(1,6);
+% % % % % 
+% % % % % t = t + del_t;
+% % % % % 
+% % % % % while t <= tf + del_t/2
+% % % % %     [~,z] = ode45(@(t,f) rates_book(t,f,R0,V0,t0,ad_vect), [t0 t], del_y0, options);
+% % % % % 
+% % % % %     [Rosc,Vosc] = rv_from_r0v0(R0, V0, t-t0);
+% % % % % 
+% % % % %     R0 = Rosc + z(end,1:3);
+% % % % %     
+% % % % %     V0 = Vosc + z(end,4:6);
+% % % % % 
+% % % % %     t0 = t;
+% % % % %     tsave = [tsave;t];
+% % % % %     y = [y; [R0 V0]];
+% % % % %     t = t + del_t;
+% % % % %     del_y0 = zeros(1,6);
+% % % % % end
+% % % % % tsave_encke = tsave;
+% % % % % y_encke = y;
+% % % % % 
 
 %% Plotting Orbits
 
@@ -157,76 +129,76 @@ y_encke = y;
 % axis equal
 % % title("Cowell's Method")
 
-%Plotting all methods together
-figure()
-plot(0,0,'ro','DisplayName', 'SUN')
-hold on
-plot(y_cowell(:,1),y_cowell(:,2),'-.b','DisplayName',"Cowell's Method")
-% hold on
-% plot(y_encke(:,1),y_encke(:,2),'-k','DisplayName', "Encke's Method - universal anomaly")
-hold on
-plot(y_encke_diego(:,1),y_encke_diego(:,2),'--r','DisplayName', "Encke's Method - eccentric anomaly")
-xlabel("$\hat{i}$ \textit{(AU)}","interpreter","latex")
-ylabel("$\hat{j}$ \textit{(AU)}","interpreter","latex")
-legend
-axis equal
-% title("Cowell's and Encke's Methods")
+% % % % % %Plotting all methods together
+% % % % % figure()
+% % % % % plot(0,0,'ro','DisplayName', 'SUN')
+% % % % % hold on
+% % % % % plot(y_cowell(:,1),y_cowell(:,2),'-.b','DisplayName',"Cowell's Method")
+% % % % % % hold on
+% % % % % % plot(y_encke(:,1),y_encke(:,2),'-k','DisplayName', "Encke's Method - universal anomaly")
+% % % % % hold on
+% % % % % plot(y_encke_diego(:,1),y_encke_diego(:,2),'--r','DisplayName', "Encke's Method - eccentric anomaly")
+% % % % % xlabel("$\hat{i}$ \textit{(AU)}","interpreter","latex")
+% % % % % ylabel("$\hat{j}$ \textit{(AU)}","interpreter","latex")
+% % % % % legend
+% % % % % axis equal
+% % % % % % title("Cowell's and Encke's Methods")
 
-%% Part 3 - Osculating Elements
-
-
-
-which_sim = y_encke_diego;
-sim_times = tsave_encke_diego;
-% which_sim = y_encke;
-% which_sim = y_cowell;
-
-[tsteps,~] = size(which_sim);
-a = zeros(tsteps,1);
-for j = 1:tsteps
-    R = [which_sim(j,1:3)];
-    V = [which_sim(j,4:6)];
-%     r(j) = norm(R);
-%     v(j) = norm(V);
-    coe = coe_from_sv(R,V, mu);
-%     h(j) = coe(1);
-    e(j) = coe(2);
-%     RA(j) = coe(3);
-%     i(j) = coe(4);
-%     w(j) = coe(5);
-%     TA(j) = coe(6);
-    a(j) = coe(7);
-end
-
-
-%same plots but picking only 5 pointsç
-n = 5; %five points
-step = floor(tsteps/(n-1));
-
-% figure()
-% plot(sim_times(1:step:end),a(1:step:end)','--x')
-% hold on
-% myFit = fit(sim_times(1:step:end),a(1:step:end),'poly1');
-% plot(myFit)
-% hold on
-% plot(sim_times,a,'-.c') %all data in cyan (very light)
-% % title("Variation of semi-major axis")
-% xlabel('\itTime (years)')
-% ylabel('\itsemi-major axis (AU)')
-% legend("semi-major axis","linear fit","Location","NorthWest")
-% 
-% figure()
-% plot(sim_times(1:step:end),e(1:step:end),'--x')
-% hold on
-% myFit = fit(sim_times(1:step:end),e(1:step:end)','poly1');
-% plot(myFit)
-% hold on
-% plot(sim_times,e,'-.c') %all data in cyan (very light)
-% % title('Variation of Eccentricity')
-% xlabel('\itTime (years)')
-% ylabel('\it\Deltae')
-% legend("eccentricity","linear fit", "Location", "NorthWest")
-% 
+% % % % % %% Part 3 - Osculating Elements
+% % % % % 
+% % % % % 
+% % % % % 
+% % % % % which_sim = y_encke_diego;
+% % % % % sim_times = tsave_encke_diego;
+% % % % % % which_sim = y_encke;
+% % % % % % which_sim = y_cowell;
+% % % % % 
+% % % % % [tsteps,~] = size(which_sim);
+% % % % % a = zeros(tsteps,1);
+% % % % % for j = 1:tsteps
+% % % % %     R = [which_sim(j,1:3)];
+% % % % %     V = [which_sim(j,4:6)];
+% % % % % %     r(j) = norm(R);
+% % % % % %     v(j) = norm(V);
+% % % % %     coe = coe_from_sv(R,V, mu);
+% % % % % %     h(j) = coe(1);
+% % % % %     e(j) = coe(2);
+% % % % % %     RA(j) = coe(3);
+% % % % % %     i(j) = coe(4);
+% % % % % %     w(j) = coe(5);
+% % % % % %     TA(j) = coe(6);
+% % % % %     a(j) = coe(7);
+% % % % % end
+% % % % % 
+% % % % % 
+% % % % % %same plots but picking only 5 pointsç
+% % % % % n = 5; %five points
+% % % % % step = floor(tsteps/(n-1));
+% % % % % 
+% % % % % % figure()
+% % % % % % plot(sim_times(1:step:end),a(1:step:end)','--x')
+% % % % % % hold on
+% % % % % % myFit = fit(sim_times(1:step:end),a(1:step:end),'poly1');
+% % % % % % plot(myFit)
+% % % % % % hold on
+% % % % % % plot(sim_times,a,'-.c') %all data in cyan (very light)
+% % % % % % % title("Variation of semi-major axis")
+% % % % % % xlabel('\itTime (years)')
+% % % % % % ylabel('\itsemi-major axis (AU)')
+% % % % % % legend("semi-major axis","linear fit","Location","NorthWest")
+% % % % % % 
+% % % % % % figure()
+% % % % % % plot(sim_times(1:step:end),e(1:step:end),'--x')
+% % % % % % hold on
+% % % % % % myFit = fit(sim_times(1:step:end),e(1:step:end)','poly1');
+% % % % % % plot(myFit)
+% % % % % % hold on
+% % % % % % plot(sim_times,e,'-.c') %all data in cyan (very light)
+% % % % % % % title('Variation of Eccentricity')
+% % % % % % xlabel('\itTime (years)')
+% % % % % % ylabel('\it\Deltae')
+% % % % % % legend("eccentricity","linear fit", "Location", "NorthWest")
+% % % % % % 
 
 %% Function definitions
 % Part 1: Cowell's Method (function)
@@ -529,4 +501,57 @@ function coe = coe_from_sv(R,V,mu)
     
     a = h^2/mu/(1 - e^2);
     coe = [h e RA incl w TA a];
+end
+
+
+
+
+
+function [t,y] = encke(tspan,y0,del_t,ad_vect)
+
+options = odeset('maxstep', del_t);
+%These will be overwritten
+t0 = tspan(1);
+tf = tspan(2);
+
+R0 = y0(1:3)';
+r0 = norm(R0);
+
+V0 = y0(4:6)';
+v0 = norm(V0);
+
+
+%Begin Encke integration
+t = t0;
+tsave = t0;
+y = [R0 V0];
+
+del_y0 = zeros(1,6);
+
+t = t + del_t;
+
+while t <= tf + del_t/2
+
+    [time,z] = ode45(@(t,f) rates_diego(t,f,R0,V0,t0,ad_vect,del_t), [t0 t], del_y0, options);
+
+
+    [Rosc,Vosc] = propDt(R0, V0,del_t);
+
+    
+    R0 = Rosc + z(end,1:3);
+    
+    V0 = Vosc + z(end,4:6);
+    
+
+
+    t0 = t;
+    tsave = [tsave;t];
+    y = [y; [R0 V0]];
+    t = t + del_t;
+    del_y0 = zeros(1,6);
+
+end
+t = tsave;
+% y_encke_diego = y;
+
 end
