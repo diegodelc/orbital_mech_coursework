@@ -9,53 +9,53 @@ mu = 39.4769; %Sun's gravitational parameter, (au^3/year^2)
 %unit conversions
 one_meter = 1/149597870700; %1m to au relation
 one_second = 1/(86400*365.25); %1 second in years
-acc_to_au_and_years = 6656.77641; %1m/s^2 to au/year^2
 hours = 3600; %Hours to seconds
 days = 24*hours; %Days to seconds
 deg = pi/180;
 
 
 %initial coordinates of spaceship (Sun-centered inertial frame)
-r0_og = [-1.05;0;0]; %au
-v0_og = [0;-6.1316;0]; %au/year ^j
+R0_og = [-1.05;0;0]; %au
+V0_og = [0;-6.1316;0]; %au/year ^j
 
 %acceleration from propulsion system
 aT0 = (1/3) * 10^-4; %m*s^-2
 aT0 = aT0 * one_meter/(one_second^2); %au/year^2
-% aT0 = aT0 * acc_to_au_and_years;
+
 
 %function handle for calculating acceleration
 ad_vect =  @(r_mag,v_unit) aT0 * ((1./r_mag).^2 ).* (v_unit);
 
-
+tspan = [0,20]; %years
 
 %% Part 1 - Cowell's Method
 %%%
 % Directly solving perturbed two-body problem with ode45
 %%%
-del_t = 0.01;
+
+del_t = 1/365; %years
 options = odeset('maxstep', del_t);
-tspan = [0,20];
-y0 = [r0_og;v0_og];
+% tspan = [0,20];
+y0 = [R0_og;V0_og];
 [t_cowell,y_cowell] = ode45(@(t,y) cowell(y,ad_vect),tspan,y0,options);
 
 
-%% Part 2 - Encke's Method (my version)
+%% Part 2 - Encke's Method (using eccentric anomaly)
+%Time step for both Encke procedures
+del_t = 1/365; %time is in years
+options = odeset('maxstep', del_t);
 
-t = [0,20]; %in years
-t0 = t(1);
-tf = t(2);
 
-R0 = r0_og';
+%These will be overwritten
+t0 = tspan(1);
+tf = tspan(2);
 
+R0 = R0_og';
 r0 = norm(R0);
 
-V0 = v0_og';
+V0 = V0_og';
 v0 = norm(V0);
 
-%Time step for Encke procedure
-del_t = 1/365; %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-options = odeset('maxstep', del_t);
 
 %Begin Encke integration
 t = t0;
@@ -87,10 +87,11 @@ while t <= tf + del_t/2
     del_y0 = zeros(1,6);
 
 end
+tsave_encke_diego = tsave;
 y_encke_diego = y;
 
 
-%% Part 2 - Encke's Method (from the book)
+%% Part 2 - Encke's Method (using unversal anomaly)
 %%%
 % Solving perturbed two-body problem using Encke's method
 %   Code implementation is based on framework from [1]
@@ -99,20 +100,18 @@ y_encke_diego = y;
 %%%
 
 
-t = [0,20]; %in years
-t0 = t(1);
-tf = t(2);
 
-R0 = r0_og';
+%These will be overwritten
+t0 = tspan(1);
+tf = tspan(2);
 
+R0 = R0_og';
 r0 = norm(R0);
 
-V0 = v0_og';
+V0 = V0_og';
 v0 = norm(V0);
 
-%Time step for Encke procedure
-del_t = 5/365; %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-options = odeset('maxstep', del_t);
+
 
 %Begin Encke integration
 t = t0;
@@ -138,10 +137,11 @@ while t <= tf + del_t/2
     t = t + del_t;
     del_y0 = zeros(1,6);
 end
+tsave_encke = tsave;
 y_encke = y;
 
 
-%% Plotting
+%% Plotting Orbits
 % % Plotting Cowell's method only
 % val = 0;
 % figure()
@@ -161,7 +161,7 @@ y_encke = y;
 % axis equal
 % title("Encke's Methd")
 
-%Plotting both methods together
+%Plotting all methods together
 figure()
 plot(0,0,'ro','DisplayName', 'SUN')
 hold on
@@ -169,79 +169,134 @@ plot(y_cowell(:,1),y_cowell(:,2),'-.b','DisplayName',"Cowell's Method")
 hold on
 plot(y_encke(:,1),y_encke(:,2),'-k','DisplayName', "Encke's Method - universal anomaly")
 hold on
-plot(y_encke_diego(:,1),y_encke_diego(:,2),'--rx','DisplayName', "Encke's Method - eccentric anomaly")
+plot(y_encke_diego(:,1),y_encke_diego(:,2),'--r','DisplayName', "Encke's Method - eccentric anomaly")
 legend
 axis equal
 title("Cowell's and Encke's Methds")
 
 %% Part 3 - Osculating Elements
-t = tsave;
-n_times = length(t);
 
-for j = 1:n_times
-    R = [y_encke(j,1:3)];
-    V = [y_encke(j,4:6)];
-    r(j) = norm(R);
-    v(j) = norm(V);
+
+
+which_sim = y_encke_diego;
+sim_times = tsave_encke_diego;
+% which_sim = y_encke;
+% which_sim = y_cowell;
+
+[tsteps,~] = size(which_sim);
+a = zeros(tsteps,1);
+for j = 1:tsteps
+    R = [which_sim(j,1:3)];
+    V = [which_sim(j,4:6)];
+%     r(j) = norm(R);
+%     v(j) = norm(V);
     coe = coe_from_sv(R,V, mu);
-    h(j) = coe(1);
+%     h(j) = coe(1);
     e(j) = coe(2);
-    RA(j) = coe(3);
-    i(j) = coe(4);
-    w(j) = coe(5);
-    TA(j) = coe(6);
+%     RA(j) = coe(3);
+%     i(j) = coe(4);
+%     w(j) = coe(5);
+%     TA(j) = coe(6);
+    a(j) = coe(7);
 end
 
+
+% figure()
+% plot(tsave,a)
+% title("Variation of semi-major axis")
+% xlabel('\itTime (years)')
+% ylabel('\itsemi-major axis (AU)')
+% 
+% figure()
+% plot(sim_times,e)
+% hold on
+% myFit = fit(sim_times,e','poly1');
+% plot(myFit)
+% title('Variation of Eccentricity')
+% xlabel('\itTime (years)')
+% ylabel('\it\Deltae')
+% legend("eccentricity","linear fit", "Location", "NorthWest")
+
+
+%same plots but picking only 5 pointsç
+n = 5; %five points
+step = floor(tsteps/(n-1));
+
 figure()
-
-subplot(2,1,1)
-plot(t/3600,(RA)/deg)
-title('Variation of Right Ascension')
-xlabel('hours')
-ylabel('{\it\Delta\Omega} (deg)')
-grid on
-grid minor
-axis tight
-
-subplot(2,1,2)
-plot(t/3600,(w)/deg)
-title('Variation of Argument of Perigee')
-xlabel('hours')
-ylabel('{\it\Delta\omega} (deg)')
-grid on
-grid minor
-axis tight
+plot(sim_times(1:step:end),a(1:step:end)','--x')
+hold on
+myFit = fit(sim_times(1:step:end),a(1:step:end),'poly1');
+plot(myFit)
+hold on
+plot(sim_times,a,'-.c') %all data in cyan (very light)
+title("Variation of semi-major axis")
+xlabel('\itTime (years)')
+ylabel('\itsemi-major axis (AU)')
+legend("semi-major axis","linear fit","Location","NorthWest")
 
 figure()
-subplot(3,1,1)
-plot(t/3600,h)
-title('Variation of Angular Momentum')
-xlabel('hours')
-ylabel('{\it\Deltah} (km^2/s)')
-grid on
-grid minor
-axis tight
-
-subplot(3,1,2)
-plot(t/3600,e)
+plot(sim_times(1:step:end),e(1:step:end),'--x')
+hold on
+myFit = fit(sim_times(1:step:end),e(1:step:end)','poly1');
+plot(myFit)
+hold on
+plot(sim_times,e,'-.c') %all data in cyan (very light)
 title('Variation of Eccentricity')
-xlabel('hours')
+xlabel('\itTime (years)')
 ylabel('\it\Deltae')
-grid on
-grid minor
-axis tight
+legend("eccentricity","linear fit", "Location", "NorthWest")
 
-subplot(3,1,3)
-plot(t/3600,(i)/deg)
-title('Variation of Inclination')
-xlabel('hours')
-ylabel('{\it\Deltai} (deg)')
-grid on
-grid minor
-axis tight
+
+% % 
+% % figure()
+% % subplot(2,1,1)
+% % plot(t,(RA)/deg)
+% % title('Variation of Right Ascension')
+% % xlabel('years')
+% % ylabel('{\it\Delta\Omega} (deg)')
+% % grid on
+% % grid minor
+% % axis tight
+% % 
+% % subplot(2,1,2)
+% % plot(t/3600,(w)/deg)
+% % title('Variation of Argument of Perigee')
+% % xlabel('hours')
+% % ylabel('{\it\Delta\omega} (deg)')
+% % grid on
+% % grid minor
+% % axis tight
+% % 
+% % figure()
+% % subplot(3,1,1)
+% % plot(t/3600,h)
+% % title('Variation of Angular Momentum')
+% % xlabel('hours')
+% % ylabel('{\it\Deltah} (km^2/s)')
+% % grid on
+% % grid minor
+% % axis tight
+% % 
+% % subplot(3,1,2)
+% % plot(t/3600,e)
+% % title('Variation of Eccentricity')
+% % xlabel('hours')
+% % ylabel('\it\Deltae')
+% % grid on
+% % grid minor
+% % axis tight
+% % 
+% % subplot(3,1,3)
+% % plot(t/3600,(i)/deg)
+% % title('Variation of Inclination')
+% % xlabel('hours')
+% % ylabel('{\it\Deltai} (deg)')
+% % grid on
+% % grid minor
+% % axis tight
 
 %% Function definitions
-% Part 1: Cowell's Method (function(s))
+% Part 1: Cowell's Method (function)
 function stateSpaceRepCowell = cowell(y,ad_fun)
     r = y(1:3);
     v = y(4:6);
@@ -259,63 +314,6 @@ function stateSpaceRepCowell = cowell(y,ad_fun)
 end
 
 %Part 2: Encke's method (functions)
-function coe = coe_from_sv(R,V,mu)
-    eps = 1.e-10;
-    
-    r = norm(R);
-    v = norm(V);
-
-    vr = dot(R,V)/r;
-    H = cross(R,V);
-    h = norm(H);
-    
-    incl = acos(H(3)/h);
-    
-    N = cross([0 0 1],H);
-    n = norm(N);
-    
-    if n ~= 0
-        RA = acos(N(1)/n);
-        if N(2) < 0
-            RA = 2*pi - RA;
-        end
-    else
-    RA = 0;
-    end
-    
-    E = 1/mu*((v^2 - mu/r)*R - r*vr*V);
-    e = norm(E);
-    
-    if n ~= 0
-        if e > eps
-            w = acos(dot(N,E)/n/e);
-            if E(3) < 0
-                w = 2*pi - w;
-            end
-        else
-            w = 0;
-        end
-    else
-        w = 0;
-    end
-    if e > eps
-        TA = acos(dot(E,R)/e/r);
-        if vr < 0
-            TA = 2*pi - TA;
-        end
-    else
-        cp = cross(N,R);
-        if cp(3) >= 0
-            TA = acos(dot(N,R)/n/r);
-        else
-            TA = 2*pi - acos(dot(N,R)/n/r);
-        end
-    end
-    
-    a = h^2/mu/(1 - e^2);
-    coe = [h e RA incl w TA a];
-end
-
 function dfdt = rates_book(t,f,R0,V0,t0,ad_vect)
     del_r = f(1:3)'; %Position deviation
     del_v = f(4:6)'; %Velocity deviation
@@ -552,4 +550,62 @@ function [R,V] = propDt(R0,V0,t,t0,del_t)
 %     R = R';
 %     V = V';
 
+end
+
+%Part 3 - Osculating elements (function)
+function coe = coe_from_sv(R,V,mu)
+    eps = 1.e-10;
+    
+    r = norm(R);
+    v = norm(V);
+
+    vr = dot(R,V)/r;
+    H = cross(R,V);
+    h = norm(H);
+    
+    incl = acos(H(3)/h);
+    
+    N = cross([0 0 1],H);
+    n = norm(N);
+    
+    if n ~= 0
+        RA = acos(N(1)/n);
+        if N(2) < 0
+            RA = 2*pi - RA;
+        end
+    else
+    RA = 0;
+    end
+    
+    E = 1/mu*((v^2 - mu/r)*R - r*vr*V);
+    e = norm(E);
+    
+    if n ~= 0
+        if e > eps
+            w = acos(dot(N,E)/n/e);
+            if E(3) < 0
+                w = 2*pi - w;
+            end
+        else
+            w = 0;
+        end
+    else
+        w = 0;
+    end
+    if e > eps
+        TA = acos(dot(E,R)/e/r);
+        if vr < 0
+            TA = 2*pi - TA;
+        end
+    else
+        cp = cross(N,R);
+        if cp(3) >= 0
+            TA = acos(dot(N,R)/n/r);
+        else
+            TA = 2*pi - acos(dot(N,R)/n/r);
+        end
+    end
+    
+    a = h^2/mu/(1 - e^2);
+    coe = [h e RA incl w TA a];
 end
