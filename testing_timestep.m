@@ -46,24 +46,31 @@ vfinal = final(4:6)
 %% Part 2 - Encke's Method (using eccentric anomaly)
 %Time step for both Encke procedures
 del_t = 10/365; %time is in years
-del_ts = [1,5,10,15,20,30,50,100,160,200]/365.25; %in days
+del_ts = [1,2,4,5,7,10,15,20,30,50,100,160,200]/365.25; %in days
 errors = zeros(length(del_ts),1);
+errors_universal = zeros(length(del_ts),1);
 
 cowell_size = length(t_cowell);
 
 for i = 1:length(del_ts)
     [t,y] = encke(tspan,y0,del_ts(i),ad_vect);
+    [t_universal,y_universal] = encke_universal(tspan,y0,del_ts(i),ad_vect);
+    
     this_size = length(t);
     
     step = (cowell_size/this_size);
     errors(i) = norm((y_cowell(1:step:end,:)-y));
+    errors_universal(i) = norm((y_cowell(1:step:end,:)-y_universal));
     
 end
 %%
 figure()
-plot(del_ts*365.25,errors,'x--')
+plot(del_ts*365.25,errors,'bx--','DisplayName','Eccentric Anomaly')
+hold on
+plot(del_ts*365.25,errors_universal,'ro--','DisplayName','Universal Anomaly')
 xlabel("Rectification timestep \textit{(days)}", "interpreter","latex")
-ylabel("Error (L1 norm)", "interpreter","latex")
+ylabel("Error (L2 norm)", "interpreter","latex")
+legend('Location','NorthWest')
 
 
 % % % % % %% Part 2 - Encke's Method (using unversal anomaly)
@@ -553,5 +560,49 @@ while t <= tf + del_t/2
 end
 t = tsave;
 % y_encke_diego = y;
+
+end
+
+function [t,y] = encke_universal(tspan,y0,del_t,ad_vect)
+
+options = odeset('maxstep', del_t);
+%These will be overwritten
+t0 = tspan(1);
+tf = tspan(2);
+
+R0 = y0(1:3)';
+r0 = norm(R0);
+
+V0 = y0(4:6)';
+v0 = norm(V0);
+
+
+
+%Begin Encke integration
+t = t0;
+tsave = t0;
+y = [R0 V0];
+
+del_y0 = zeros(1,6);
+
+t = t + del_t;
+
+while t <= tf + del_t/2
+    [~,z] = ode45(@(t,f) rates_book(t,f,R0,V0,t0,ad_vect), [t0 t], del_y0, options);
+
+    [Rosc,Vosc] = rv_from_r0v0(R0, V0, t-t0);
+
+    R0 = Rosc + z(end,1:3);
+    
+    V0 = Vosc + z(end,4:6);
+
+    t0 = t;
+    tsave = [tsave;t];
+    y = [y; [R0 V0]];
+    t = t + del_t;
+    del_y0 = zeros(1,6);
+end
+t = tsave;
+% y_encke = y;
 
 end

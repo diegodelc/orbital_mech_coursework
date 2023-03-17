@@ -33,7 +33,7 @@ tspan = [0,20]; %years
 % Directly solving perturbed two-body problem with ode45
 %%%
 
-del_t = 1/365; %years
+del_t = 1/365.25; %years
 options = odeset('maxstep', del_t);
 % tspan = [0,20];
 y0 = [R0_og;V0_og];
@@ -45,8 +45,8 @@ vfinal = final(4:6)
 
 %% Part 2 - Encke's Method (using eccentric anomaly)
 %Time step for both Encke procedures
-del_t = 10/365; %time is in years
-options = odeset('maxstep', del_t);
+del_t = 20; %time is in years
+options = odeset('maxstep', del_t,'abstol',1e-8,'reltol',1e-8);
 
 
 %These will be overwritten
@@ -68,9 +68,9 @@ y = [R0 V0];
 del_y0 = zeros(1,6);
 
 t = t + del_t;
-
-while t <= tf + del_t/2
-
+saved_states = zeros(1,6);
+while t < tf
+    
     [time,z] = ode45(@(t,f) rates_diego(t,f,R0,V0,t0,ad_vect,del_t), [t0 t], del_y0, options);
 
 
@@ -86,9 +86,34 @@ while t <= tf + del_t/2
     t0 = t;
     tsave = [tsave;t];
     y = [y; [R0 V0]];
+    
     t = t + del_t;
     del_y0 = zeros(1,6);
+    
+   
 
+end
+
+if t0 ~= tf
+    t = tf;
+    [time,z] = ode45(@(t,f) rates_diego(t,f,R0,V0,t0,ad_vect,del_t), [t0 t], del_y0, options);
+    
+    
+    [Rosc,Vosc] = propDt(R0, V0,del_t);
+    
+    
+    R0 = Rosc + z(end,1:3);
+    
+    V0 = Vosc + z(end,4:6);
+    
+    
+    
+%     t0 = t;
+    tsave = [tsave;t];
+    y = [y; [R0 V0]];
+    
+%     t = t + del_t;
+%     del_y0 = zeros(1,6);
 end
 tsave_encke_diego = tsave;
 y_encke_diego = y;
@@ -159,13 +184,13 @@ y_encke = y;
 
 %Plotting all methods together
 figure()
-plot(0,0,'ro','DisplayName', 'SUN')
+plot(0,0,'go','DisplayName', 'SUN')
 hold on
 plot(y_cowell(:,1),y_cowell(:,2),'-.b','DisplayName',"Cowell's Method")
-% hold on
-% plot(y_encke(:,1),y_encke(:,2),'-k','DisplayName', "Encke's Method - universal anomaly")
 hold on
-plot(y_encke_diego(:,1),y_encke_diego(:,2),'--r','DisplayName', "Encke's Method - eccentric anomaly")
+plot(y_encke(:,1),y_encke(:,2),'-xk','DisplayName', "Encke's Method - universal anomaly")
+hold on
+plot(y_encke_diego(:,1),y_encke_diego(:,2),'--or','DisplayName', "Encke's Method - eccentric anomaly")
 xlabel("$\hat{i}$ \textit{(AU)}","interpreter","latex")
 ylabel("$\hat{j}$ \textit{(AU)}","interpreter","latex")
 legend
@@ -173,6 +198,58 @@ axis equal
 % title("Cowell's and Encke's Methods")
 
 %% Part 3 - Osculating Elements
+
+
+times = t_cowell(1:length(t_cowell-1)/4:end)
+times = [times;t_cowell(end)]
+ys = [R0_og' V0_og'];
+
+for i = 2:length(times)
+    ys = [ys; y_cowell(times(i) == t_cowell,:)];
+    
+end
+
+ys;
+[row,col] = size(ys);
+figure()
+plot(0,0,'go')
+hold on
+for i = 1:row
+    
+    R0 = ys(i,1:3);
+    V0 = ys(i,4:6);
+    sol = [R0 V0];
+    for j = 1:5/365:10
+        
+        [R0,V0] = propDt(R0,V0,5/365); %% propagate each five years
+        sol = [sol;[R0 V0]];
+    end
+    plot(sol(:,1),sol(:,2),'-','DisplayName', sprintf("Initial time: %.1f years",times(i)))
+    hold on
+end
+plot(y_cowell(:,1),y_cowell(:,2),'-c','DisplayName',"Cowell's Method")
+hold on
+
+%plot the starting points
+for i=1:5
+    plot(ys(i,1),ys(i,2),'x','DisplayName',"")
+    hold on
+end
+legend("Sun",...
+       sprintf("Initial time: %.1f years",times(1)),...
+       sprintf("Initial time: %.1f years",times(2)),...
+       sprintf("Initial time: %.1f years",times(3)),...
+       sprintf("Initial time: %.1f years",times(4)),...
+       sprintf("Initial time: %.1f years",times(5)),...
+       "Cowell's Method",...
+       'Location', 'best');
+axis equal
+xlabel("$\hat{i}$ \textit{(AU)}","interpreter","latex")
+ylabel("$\hat{j}$ \textit{(AU)}","interpreter","latex")
+sol;
+%%
+
+
 
 
 
@@ -203,28 +280,28 @@ end
 n = 5; %five points
 step = floor(tsteps/(n-1));
 
-% figure()
+figure()
 % plot(sim_times(1:step:end),a(1:step:end)','--x')
 % hold on
 % myFit = fit(sim_times(1:step:end),a(1:step:end),'poly1');
 % plot(myFit)
 % hold on
-% plot(sim_times,a,'-.c') %all data in cyan (very light)
-% % title("Variation of semi-major axis")
-% xlabel('\itTime (years)')
-% ylabel('\itsemi-major axis (AU)')
+plot(sim_times,a,'-.k') %all data in cyan (very light)
+% title("Variation of semi-major axis")
+xlabel('\itTime (years)')
+ylabel('\itsemi-major axis (AU)')
 % legend("semi-major axis","linear fit","Location","NorthWest")
-% 
-% figure()
+
+figure()
 % plot(sim_times(1:step:end),e(1:step:end),'--x')
 % hold on
 % myFit = fit(sim_times(1:step:end),e(1:step:end)','poly1');
 % plot(myFit)
 % hold on
-% plot(sim_times,e,'-.c') %all data in cyan (very light)
-% % title('Variation of Eccentricity')
-% xlabel('\itTime (years)')
-% ylabel('\it\Deltae')
+plot(sim_times,e,'-.k') %all data in cyan (very light)
+% title('Variation of Eccentricity')
+xlabel('\itTime (years)')
+ylabel('\it\Deltae')
 % legend("eccentricity","linear fit", "Location", "NorthWest")
 % 
 
@@ -248,6 +325,7 @@ end
 
 %Part 2: Encke's method (functions)
 function dfdt = rates_book(t,f,R0,V0,t0,ad_vect)
+    global mu
     del_r = f(1:3)'; %Position deviation
     del_v = f(4:6)'; %Velocity deviation
     
@@ -262,7 +340,10 @@ function dfdt = rates_book(t,f,R0,V0,t0,ad_vect)
     
     r_in = Rpp;
     r_mag = norm(r_in);
-    del_a = ad_vect(r_mag,v_unit);
+    
+    
+    del_a = (-mu/norm(Rosc)^3)*(del_r- (1-norm(Rosc)^3/norm(Rpp)^3).*Rpp) + ... 
+            ad_vect(r_mag,v_unit);
 
     dfdt = [del_v del_a]';
 
@@ -373,23 +454,29 @@ end
 
 % Part 2 - my way
 function dfdt = rates_diego(t,f,R0,V0,t0,ad_vect,del_t)
+    global mu
     del_r = f(1:3)'; %Position deviation
     del_v = f(4:6)'; %Velocity deviation
     
 %     disp("from rates: ")
-    [Rosc,Vosc] = propDt(R0, V0,del_t);
+    [Rosc,Vosc] = propDt(R0, V0,t-t0);
     
    
         
     Rpp = Rosc + del_r;
     Vpp = Vosc + del_v;
 
-    v_in = Vpp;
-    v_unit = v_in/norm(v_in);
+%     v_in = Vpp;
+%     v_unit = v_in/norm(v_in);
     
-    r_in = Rpp;
-    r_mag = norm(r_in);
-    del_a = ad_vect(r_mag,v_unit);
+%     r_in = Rpp;
+%     r_mag = norm(r_in);
+    
+    ad = ad_vect(norm(Rpp),Vpp/norm(Vpp));
+    q = dot(del_r, del_r - 2*Rpp)/(norm(Rpp)^2);
+    F = -q*(3+3*q+q^2) / (1+(1+q)^(1.5));
+    del_a = -mu*del_r/(norm(Rosc)^3) + mu*Rpp/(norm(Rosc)^3)*F + ad;
+
 
     dfdt = [del_v del_a]';
 
@@ -457,11 +544,14 @@ function [R,V] = propDt(R0,V0,del_t)
 
     %find fdot and gdot
     gdot = 1 - (mu*r0/h^2)*(1-cos(del_theta));
-%     fdot = (mu/h) * ...
-%         ((1-cos(del_theta))/sin(del_theta)) * ...
-%         ((mu/h^2)*(1-cos(del_theta)) - (1/r0) - (1/r1));
-    fdot = (f*gdot-1)/g;
-
+    if abs(del_theta) < 1e-8
+       fdot = 0;
+    else
+        fdot = (mu/h) * ...
+            ((1-cos(del_theta))/sin(del_theta)) * ...
+            ((mu/h^2)*(1-cos(del_theta)) - (1/r0) - (1/r));
+    %     fdot = (f*gdot-1)/g;
+    end
     %find R and V
     R = f*R0 + g*V0;
     V = fdot*R0 + gdot*V0;
